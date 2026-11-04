@@ -6,18 +6,13 @@ controller.login = async function(req, res) {
   const username = req.body?.username ?? ''
   const password = req.body?.password ?? ''
 
-  // DESAFIO: esta concatenação é intencionalmente vulnerável a SQL Injection.
-  // Não reutilizar este padrão em código de produção.
-  // OWASP Top 10:2025 A05 - Injeção (SQL Injection):
-  // entradas concatenadas ao SQL são executadas por $queryRawUnsafe como parte da consulta.
-  const query = `SELECT * FROM "User" WHERE username = '${username}' AND password = '${password}'`
-  
-  // OWASP Top 10:2025 A09 - Falhas nos Logs de Segurança e no Sistema de Alertas:
-  // a consulta registrada contém as credenciais informadas, incluindo a senha.
-  console.log('****** INSECURE SQL:', query)
+  // CORREÇÃO SQL INJECTION: consulta parametrizada do Prisma ($queryRaw com template tag).
+  // Os valores de username e password são enviados ao banco como parâmetros (dados),
+  // e não concatenados à instrução SQL, impedindo que sejam interpretados como código.
+  const query = 'SELECT * FROM "User" WHERE username = ? AND password = ?'
 
   try {
-    const users = await prisma.$queryRawUnsafe(query)
+    const users = await prisma.$queryRaw`SELECT * FROM "User" WHERE username = ${username} AND password = ${password}`
 
     if(users.length > 0) {
       return res.send({
