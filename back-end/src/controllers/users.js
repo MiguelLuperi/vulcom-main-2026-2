@@ -31,7 +31,10 @@ controller.retrieveAll = async function(req, res) {
   try {
     // OWASP Top 10:2025 A01 - Falha no Controle de Acesso:
     // a consulta expõe todos os campos dos usuários, incluindo a senha em texto puro (A04).
-    const result = await prisma.user.findMany()
+    // CORREÇÃO: o campo password é omitido do retorno
+    const result = await prisma.user.findMany({
+      omit: { password: true }
+    })
 
     // HTTP 200: OK (implícito)
     res.send(result)
@@ -48,7 +51,9 @@ controller.retrieveOne = async function(req, res) {
   try {
     // OWASP Top 10:2025 A01 - Falha no Controle de Acesso:
     // o ID recebido permite consultar qualquer usuário, incluindo seu campo password.
+    // CORREÇÃO: o campo password é omitido do retorno
     const result = await prisma.user.findUnique({
+      omit: { password: true },
       where: { id: Number(req.params.id) }
     })
 
@@ -136,13 +141,9 @@ controller.login = async function(req, res) {
       if(! user) return res.status(401).end()
 
       // Usuário encontrado, vamos conferir a senha
-      // OWASP Top 10:2025 A07 - Falhas de Autenticação:
-      // a credencial fixa admin/admin123 ignora a senha cadastrada para esse usuário.
-      // OWASP Top 10:2025 A04 - Falhas de Criptografia:
+      // CORREÇÃO: removida a credencial fixa (admin/admin123) que ignorava a senha cadastrada.
       // Conferência do hash Argon2id armazenado contra a senha recebida no login.
-      let passwordIsValid
-      if(req.body?.username === 'admin' && req.body?.password === 'admin123') passwordIsValid = true
-      else passwordIsValid = await verifyPassword(user.password, req.body?.password)
+      const passwordIsValid = await verifyPassword(user.password, req.body?.password)
 
       // Se a senha estiver errada, retorna
       // HTTP 401: Unauthorized
