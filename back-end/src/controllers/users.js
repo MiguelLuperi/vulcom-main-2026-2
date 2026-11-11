@@ -1,5 +1,6 @@
 import prisma from '../database/client.js'
 import jwt from 'jsonwebtoken'
+import { hashPassword, verifyPassword } from '../config/argon2.js'
 
 const controller = {}     // Objeto vazio
 
@@ -8,7 +9,11 @@ controller.create = async function(req, res) {
 
     // OWASP Top 10:2025 A01 - Falha no Controle de Acesso:
     // atribuição em massa permite ao cliente definir campos sensíveis, como is_admin.
-    // OWASP Top 10:2025 A04 - Falhas de Criptografia: password é persistido sem hash.
+    // Hashing da senha com Argon2id antes de salvar no BD
+    if(req.body?.password) {
+      req.body.password = await hashPassword(req.body.password)
+    }
+
     await prisma.user.create({ data: req.body })
 
     // HTTP 201: Created
@@ -65,7 +70,11 @@ controller.update = async function(req, res) {
 
     // OWASP Top 10:2025 A01 - Falha no Controle de Acesso:
     // o cliente pode alterar is_admin e password de qualquer usuário por atribuição em massa.
-    // OWASP Top 10:2025 A04 - Falhas de Criptografia: a nova senha também é gravada sem hash.
+    // Se houver mudança de senha, gera o hash com Argon2id antes de salvar
+    if(req.body?.password) {
+      req.body.password = await hashPassword(req.body.password)
+    }
+
     const result = await prisma.user.update({
       where: { id: Number(req.params.id) },
       data: req.body
@@ -130,10 +139,10 @@ controller.login = async function(req, res) {
       // OWASP Top 10:2025 A07 - Falhas de Autenticação:
       // a credencial fixa admin/admin123 ignora a senha cadastrada para esse usuário.
       // OWASP Top 10:2025 A04 - Falhas de Criptografia:
-      // a comparação direta usa a senha armazenada em texto puro, sem hash adaptativo.
+      // Conferência do hash Argon2id armazenado contra a senha recebida no login.
       let passwordIsValid
       if(req.body?.username === 'admin' && req.body?.password === 'admin123') passwordIsValid = true
-      else passwordIsValid = user.password === req.body?.password
+      else passwordIsValid = await verifyPassword(user.password, req.body?.password)
 
       // Se a senha estiver errada, retorna
       // HTTP 401: Unauthorized
